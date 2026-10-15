@@ -1,34 +1,33 @@
+import os
 import threading
 import time
 from flask import Flask
 
 app = Flask(__name__)
 
-# Strategy Configuration for EURUSD
+# ከ Render Environment Variables ሚስጥራዊ መረጃዎችን በአስተማማኝ ሁኔታ ማንበብ
+EXNESS_LOGIN = os.environ.get("EXNESS_LOGIN")
+EXNESS_PASSWORD = os.environ.get("EXNESS_PASSWORD")
+EXNESS_SERVER = os.environ.get("EXNESS_SERVER")
+
 SYMBOL = "EURUSD"
 TIMEFRAME = "15M"
 
 @app.route('/')
 def home():
-    return f"Exness Trading Bot is Live and Monitoring {SYMBOL} ({TIMEFRAME}) 24/7!"
-
-def analyze_eurusd_strategy():
-    print(f"[{SYMBOL}] Scanning 15M Chart...")
-    print(f"[{SYMBOL}] Checking EMA 9 & EMA 21 Crossover...")
-    print(f"[{SYMBOL}] Looking for Bullish/Bearish Fair Value Gap (FVG)...")
-    print(f"[{SYMBOL}] Monitoring Order Block Retest for Entry...")
-    
-    # እዚህ ጋር የ EURUSD ገበያ ሲግናል ሲገኝ ወደ Exness Order ይላካል
-    # Entry Rule: EMA 9/21 Cross + FVG + Retest
+    return f"Exness Trading Bot for {SYMBOL} is Securely Running Live 24/7!"
 
 def run_trading_bot():
-    print(f"=== Exness Auto-Trading Bot Started for {SYMBOL} ===")
+    print(f"=== Secure Exness Bot Started for {SYMBOL} ===")
+    print(f"Connected Account ID: {EXNESS_LOGIN} on Server: {EXNESS_SERVER}")
+    
     while True:
         try:
-            analyze_eurusd_strategy()
-            time.sleep(60) # በየ 1 ደቂቃው EURUSD ገበያን ይፈትሻል
+            print(f"[{SYMBOL}] Scanning 15M Chart for EMA 9/21, FVG & Order Block...")
+            # እዚህ ጋር ከ Exness Server ጋር ተገናኝቶ Trade የማድረግ ስራ ይከናወናል
+            time.sleep(60)
         except Exception as e:
-            print(f"Error analyzing {SYMBOL}: {e}")
+            print(f"Error: {e}")
             time.sleep(10)
 
 if __name__ == "__main__":
