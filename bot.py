@@ -1,55 +1,83 @@
-import time
 import os
-from flask import Flask # ዌብ ሰርቨሩ በ Render እንዲሰቅል የሚረዳ (ካለዎት)
+import time
+import threading
+import requests
+from flask import Flask
 
 app = Flask(__name__)
 
+# Config - Environment Variables
+EXNESS_LOGIN = os.environ.get("EXNESS_LOGIN")
+EXNESS_PASSWORD = os.environ.get("EXNESS_PASSWORD")
+EXNESS_SERVER = os.environ.get("EXNESS_SERVER")
+
+SYMBOL = "EURUSD"
+
 @app.route('/')
 def home():
-    return "Exness Trading Bot is running live!"
+    return f"Exness Trading Bot for {SYMBOL} is Active (EMA 9/21 Crossover Strategy)!"
 
-# የትሬዲንግ ሎጂክ እና ሉፕ (Loop) የሚሰራበት ዋናው ክፍል
+def calculate_ema(prices, period):
+    """የ EMA ዋጋን የሚያሰላ ተግባር"""
+    multiplier = 2 / (period + 1)
+    ema = sum(prices[:period]) / period
+    for price in prices[period:]:
+        ema = (price - ema) * multiplier + ema
+    return ema
+
 def run_trading_bot():
-    print(">>> ትሬዲንግ ቦቱ መሥራት ጀምሯል! (Trading Bot Started)")
+    print(f"=== Exness Auto-Trading Bot Started for {SYMBOL} (EMA Crossover Strategy) ===")
+    print(f"Account ID: {EXNESS_LOGIN} | Server: {EXNESS_SERVER}")
     
+    # ለሙከራ እና ለሎግ የሚረዱ ያለፉ የ EMA ዋጋዎች
+    previous_ema9 = None
+    previous_ema21 = None
+
     while True:
         try:
             print("\n-----------------------------------------")
-            print("--- ገበያውን በመፈተሽ ላይ... (Checking Market) ---")
+            print(f"[{SYMBOL}] የ 15M ቻርት የ EMA 9 እና EMA 21 መቋረጥን በመፈተሽ ላይ...")
             
-            # እዚህ ጋር የ Exness ዋጋን እና አመልካቾችን (RSI/EMA) የሚቀበልበት ኮድዎ ይኖራል
-            # ምሳሌ ያህል፦
-            current_price = 1.0855  # ከ Exness የሚመጣው ዋጋ
-            current_rsi = 35.5      # የ RSI ዋጋ
+            # እዚህ ጋር ከ Exness/MetaTrader የቅርብ ጊዜ የ EURUSD ዋጋዎች ይወሰዳሉ
+            # (ምሳሌ ያህል የአሁኑ የ EMA ስሌት)፦
+            current_ema9 = 1.0860   # የአሁኑ EMA 9 ዋጋ
+            current_ema21 = 1.0855  # የአሁኑ EMA 21 ዋጋ
             
-            print(f"የአሁኑ የ EURUSD ዋጋ: {current_price} | RSI: {current_rsi}")
-            
-            # የ ግዢ (Buy) ወይም ሽያጭ (Sell) ሁኔታዎችን ማረጋገጥ
-            if current_rsi < 30:
-                print(">>> [BUY SIGNAL] RSI ከ 30 በታች ወርዷል! ትሬድ ሊከፈት ነው...")
-                # እዚህ ጋር ትሬድ የሚከፍትበት ኮድዎ ይጻፋል
-                
-            elif current_rsi > 70:
-                print(">>> [SELL SIGNAL] RSI ከ 70 በላይ ወጥቷል! ትሬድ ሊከፈት ነው...")
-                # እዚህ ጋር ሽያጭ የሚከፍትበት ኮድዎ ይጻፋል
-                
+            print(f"የአሁኑ EMA 9: {current_ema9} | የአሁኑ EMA 21: {current_ema21}")
+
+            if previous_ema9 is not None and previous_ema21 is not None:
+                # 1. Bullish Crossover (EMA 9 ወደ ላይ ሲያቋርጥ)
+                if previous_ema9 <= previous_ema21 and current_ema9 > current_ema21:
+                    print(">>> [BUY SIGNAL DETECTED!] EMA 9 EMA 21ን ወደ ላይ አቋርጧል! BUY Trade እየተከፈተ ነው...")
+                    # እዚህ ጋር የ Exness BUY Trade መክፈቻ ኮድ ይፈጸማል
+
+                # 2. Bearish Crossover (EMA 9 ወደ ታች ሲያቋርጥ)
+                elif previous_ema9 >= previous_ema21 and current_ema9 < current_ema21:
+                    print(">>> [SELL SIGNAL DETECTED!] EMA 9 EMA 21ን ወደ ታች አቋርጧል! SELL Trade እየተከፈተ ነው...")
+                    # እዚህ ጋር የ Exness SELL Trade መክፈቻ ኮድ ይፈጸማል
+
+                else:
+                    print("EMA 9 እና EMA 21 ገና አልተቋረጡም፤ ቦቱ መጠበቁን ይቀጥላል...")
             else:
-                print("ስታንዳርዱ አሁንም አልተሟላም፤ ቦቱ መጠበቁን ይቀጥላል...")
+                print("የመጀመሪያውን የ EMA ዋጋ በመመዝገብ ላይ...")
+
+            # ዋጋዎቹን ለቀጣዩ ዙር ማስታወስ
+            previous_ema9 = current_ema9
+            previous_ema21 = current_ema21
 
         except Exception as e:
-            print(f"!!! ስህተት አጋጥሟል (Error): {e}")
+            print(f"!!! Error in trading loop: {e}")
 
-        # ቀጣዩን ምርመራ ከማድረጉ በፊት ለተወሰነ ደቂቃ (ለምሳሌ 60 ሰከንድ) ማቆም
+        # በየ 1 ደቂቃው ገበያውን ይፈትሻል
         time.sleep(60)
 
 if __name__ == '__main__':
-    # ቦቱ ከሰርቨሩ ጋር በአንድ ጊዜ እንዲሰራ (Threading) ማድረግ ከፈለጉ እዚህ ይጨመራል
-    import threading
+    # 1. Trading Thread
     bot_thread = threading.Thread(target=run_trading_bot)
     bot_thread.daemon = True
     bot_thread.start()
-    
-    # Render ዌብ ሰርቨሩን እንዲያገኘው ማሰራት
+
+    # 2. Render Web Server
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
     
