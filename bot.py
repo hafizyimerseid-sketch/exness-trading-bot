@@ -1,83 +1,65 @@
 import os
 import time
 import threading
-import requests
+import yfinance as yf
 from flask import Flask
 
 app = Flask(__name__)
 
-# Config - Environment Variables
-EXNESS_LOGIN = os.environ.get("EXNESS_LOGIN")
-EXNESS_PASSWORD = os.environ.get("EXNESS_PASSWORD")
-EXNESS_SERVER = os.environ.get("EXNESS_SERVER")
-
-SYMBOL = "EURUSD"
+SYMBOL = "EURUSD=X"
 
 @app.route('/')
 def home():
-    return f"Exness Trading Bot for {SYMBOL} is Active (EMA 9/21 Crossover Strategy)!"
+    return "Exness Trading Signal Bot with Real Market Data is Active!"
 
-def calculate_ema(prices, period):
-    """የ EMA ዋጋን የሚያሰላ ተግባር"""
-    multiplier = 2 / (period + 1)
-    ema = sum(prices[:period]) / period
-    for price in prices[period:]:
-        ema = (price - ema) * multiplier + ema
-    return ema
-
-def run_trading_bot():
-    print(f"=== Exness Auto-Trading Bot Started for {SYMBOL} (EMA Crossover Strategy) ===")
-    print(f"Account ID: {EXNESS_LOGIN} | Server: {EXNESS_SERVER}")
+def check_ema_crossover():
+    print("=== Exness Real-Time Trading Bot Started ===")
     
-    # ለሙከራ እና ለሎግ የሚረዱ ያለፉ የ EMA ዋጋዎች
-    previous_ema9 = None
-    previous_ema21 = None
-
     while True:
         try:
             print("\n-----------------------------------------")
-            print(f"[{SYMBOL}] የ 15M ቻርት የ EMA 9 እና EMA 21 መቋረጥን በመፈተሽ ላይ...")
+            print("የቀጥታ የ EURUSD ገበያ ዋጋዎችን ከ Yahoo Finance በመውሰድ ላይ...")
             
-            # እዚህ ጋር ከ Exness/MetaTrader የቅርብ ጊዜ የ EURUSD ዋጋዎች ይወሰዳሉ
-            # (ምሳሌ ያህል የአሁኑ የ EMA ስሌት)፦
-            current_ema9 = 1.0860   # የአሁኑ EMA 9 ዋጋ
-            current_ema21 = 1.0855  # የአሁኑ EMA 21 ዋጋ
+            # ያለፉትን የ 15 ደቂቃ ሻማዎች (15m Candles) መረጃ ያወርዳል
+            data = yf.download(tickers=SYMBOL, period="1d", interval="15m")
             
-            print(f"የአሁኑ EMA 9: {current_ema9} | የአሁኑ EMA 21: {current_ema21}")
+            if not data.empty and len(data) >= 21:
+                # EMA 9 እና EMA 21 ማሰላት
+                data['EMA9'] = data['Close'].ewm(span=9, adjust=False).mean()
+                data['EMA21'] = data['Close'].ewm(span=21, adjust=False).mean()
 
-            if previous_ema9 is not None and previous_ema21 is not None:
-                # 1. Bullish Crossover (EMA 9 ወደ ላይ ሲያቋርጥ)
-                if previous_ema9 <= previous_ema21 and current_ema9 > current_ema21:
-                    print(">>> [BUY SIGNAL DETECTED!] EMA 9 EMA 21ን ወደ ላይ አቋርጧል! BUY Trade እየተከፈተ ነው...")
-                    # እዚህ ጋር የ Exness BUY Trade መክፈቻ ኮድ ይፈጸማል
+                last_ema9 = float(data['EMA9'].iloc[-1])
+                last_ema21 = float(data['EMA21'].iloc[-1])
+                prev_ema9 = float(data['EMA9'].iloc[-2])
+                prev_ema21 = float(data['EMA21'].iloc[-2])
 
-                # 2. Bearish Crossover (EMA 9 ወደ ታች ሲያቋርጥ)
-                elif previous_ema9 >= previous_ema21 and current_ema9 < current_ema21:
-                    print(">>> [SELL SIGNAL DETECTED!] EMA 9 EMA 21ን ወደ ታች አቋርጧል! SELL Trade እየተከፈተ ነው...")
-                    # እዚህ ጋር የ Exness SELL Trade መክፈቻ ኮድ ይፈጸማል
+                print(f"የአሁኑ EMA 9: {last_ema9:.5f} | EMA 21: {last_ema21:.5f}")
 
+                # 1. Bullish Crossover (BUY)
+                if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21:
+                    print(">>> [BUY SIGNAL DETECTED!] EMA 9 EMA 21ን ወደ ላይ አቋርጧል!")
+                    # እዚህ ጋር Trade መክፈቻ ጥሪ ይደረጋል
+
+                # 2. Bearish Crossover (SELL)
+                elif prev_ema9 >= prev_ema21 and last_ema9 < last_ema21:
+                    print(">>> [SELL SIGNAL DETECTED!] EMA 9 EMA 21ን ወደ ታች አቋርጧል!")
+                    # እዚህ ጋር Trade መክፈቻ ጥሪ ይደረጋል
                 else:
-                    print("EMA 9 እና EMA 21 ገና አልተቋረጡም፤ ቦቱ መጠበቁን ይቀጥላል...")
+                    print("EMA መስመሮቹ ገና አልተቋረጡም፤ ቦቱ በንቃት እየጠበቀ ነው...")
             else:
-                print("የመጀመሪያውን የ EMA ዋጋ በመመዝገብ ላይ...")
-
-            # ዋጋዎቹን ለቀጣዩ ዙር ማስታወስ
-            previous_ema9 = current_ema9
-            previous_ema21 = current_ema21
+                print("በቂ የገበያ መረጃ ማግኘት አልተቻለም...")
 
         except Exception as e:
-            print(f"!!! Error in trading loop: {e}")
+            print(f"Error in Trading Loop: {e}")
 
         # በየ 1 ደቂቃው ገበያውን ይፈትሻል
         time.sleep(60)
 
 if __name__ == '__main__':
-    # 1. Trading Thread
-    bot_thread = threading.Thread(target=run_trading_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
+    t = threading.Thread(target=check_ema_crossover)
+    t.daemon = True
+    t.start()
 
-    # 2. Render Web Server
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
     
